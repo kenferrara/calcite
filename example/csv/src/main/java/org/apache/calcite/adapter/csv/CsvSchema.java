@@ -21,9 +21,11 @@ import org.apache.calcite.schema.impl.AbstractSchema;
 import org.apache.calcite.util.Source;
 import org.apache.calcite.util.Sources;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 
 import java.io.File;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -31,6 +33,12 @@ import java.util.Map;
  * is a CSV file in that directory.
  */
 public class CsvSchema extends AbstractSchema {
+  private static final List<String> JSON_FILE_SUFFIXES =
+      ImmutableList.<String>of(".json", ".ndjson", ".jsonl");
+
+  private static final List<String> SUPPORTED_FILE_SUFFIXES =
+      ImmutableList.<String>builder().addAll(JSON_FILE_SUFFIXES).add(".csv").build();
+
   private final File directoryFile;
   private final CsvTable.Flavor flavor;
   private Map<String, Table> tableMap;
@@ -78,8 +86,7 @@ public class CsvSchema extends AbstractSchema {
     final Source baseSource = Sources.of(directoryFile);
     File[] files = directoryFile.listFiles((dir, name) -> {
       final String nameSansGz = trim(name, ".gz");
-      return nameSansGz.endsWith(".csv")
-          || nameSansGz.endsWith(".json");
+      return SUPPORTED_FILE_SUFFIXES.stream().anyMatch(nameSansGz::endsWith);
     });
     if (files == null) {
       System.out.println("directory " + directoryFile + " not found");
@@ -90,11 +97,14 @@ public class CsvSchema extends AbstractSchema {
     for (File file : files) {
       Source source = Sources.of(file);
       Source sourceSansGz = source.trim(".gz");
-      final Source sourceSansJson = sourceSansGz.trimOrNull(".json");
-      if (sourceSansJson != null) {
-        final Table table = new JsonScannableTable(source);
-        builder.put(sourceSansJson.relative(baseSource).path(), table);
+      for (String jsonSuffix : JSON_FILE_SUFFIXES) {
+        final Source sourceSansJson = sourceSansGz.trimOrNull(jsonSuffix);
+        if (sourceSansJson != null) {
+          final Table table = new JsonScannableTable(source);
+          builder.put(sourceSansJson.relative(baseSource).path(), table);
+        }
       }
+
       final Source sourceSansCsv = sourceSansGz.trimOrNull(".csv");
       if (sourceSansCsv != null) {
         final Table table = createTable(source);

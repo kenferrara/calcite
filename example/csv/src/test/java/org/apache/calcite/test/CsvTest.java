@@ -348,6 +348,23 @@ class CsvTest {
         .ok();
   }
 
+  @Test void testJsonLines() throws SQLException {
+    final String sql = "select * from archers_lines\n";
+    final String[] lines = {
+        "id=19990101; dow=Friday; longDate=New Years Day; title=Tractor trouble.; "
+            + "characters=[Alice, Bob, Xavier]; script=Julian Hyde; summary=; "
+            + "lines=[Bob's tractor got stuck in a field., "
+            + "Alice and Xavier hatch a plan to surprise Charlie.]",
+        "id=19990103; dow=Sunday; longDate=Sunday 3rd January; "
+            + "title=Charlie's surprise.; characters=[Alice, Zebedee, Charlie, Xavier]; "
+            + "script=William Shakespeare; summary=; "
+            + "lines=[Charlie is very surprised by Alice and Xavier's surprise plan.]",
+    };
+    sql("bug", sql)
+        .returns(lines)
+        .ok();
+  }
+
   private Fluent sql(String model, String sql) {
     return new Fluent(model, sql, this::output);
   }

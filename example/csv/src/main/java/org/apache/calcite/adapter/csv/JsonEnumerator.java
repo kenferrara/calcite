@@ -24,11 +24,12 @@ import org.apache.calcite.util.Pair;
 import org.apache.calcite.util.Source;
 
 import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.databind.MappingIterator;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.exc.MismatchedInputException;
 
+import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -64,20 +65,14 @@ public class JsonEnumerator implements Enumerator<Object[]> {
     List<Object> list;
     LinkedHashMap<String, Object> jsonFieldMap = new LinkedHashMap<>(1);
     Object jsonObj = null;
+    MappingIterator<Object> jsonObjIter = null;
     try {
       objectMapper.configure(JsonParser.Feature.ALLOW_UNQUOTED_FIELD_NAMES, true)
           .configure(JsonParser.Feature.ALLOW_SINGLE_QUOTES, true)
           .configure(JsonParser.Feature.ALLOW_COMMENTS, true);
 
-      if ("file".equals(source.protocol()) && source.file().exists()) {
-        //noinspection unchecked
-        jsonObj = objectMapper.readValue(source.file(), Object.class);
-      } else if (Arrays.asList("http", "https", "ftp").contains(source.protocol())) {
-        //noinspection unchecked
-        jsonObj = objectMapper.readValue(source.url(), Object.class);
-      } else {
-        jsonObj = objectMapper.readValue(source.reader(), Object.class);
-      }
+      final JsonParser jsonParser = objectMapper.getFactory().createParser(source.openStream());
+      jsonObjIter = objectMapper.readValues(jsonParser, Object.class);
 
     } catch (MismatchedInputException e) {
       if (!e.getMessage().contains("No content")) {
@@ -87,14 +82,30 @@ public class JsonEnumerator implements Enumerator<Object[]> {
       throw new RuntimeException("Couldn't read " + source, e);
     }
 
+    if (jsonObjIter != null) {
+      try {
+        jsonObj = jsonObjIter.readAll();
+      } catch (IOException e) {
+        throw new RuntimeException("Couldn't read " + source, e);
+      }
+    }
+
     if (jsonObj == null) {
       list = new ArrayList<>();
       jsonFieldMap.put("EmptyFileHasNoColumns", Boolean.TRUE);
     } else if (jsonObj instanceof Collection) {
-      //noinspection unchecked
       list = (List<Object>) jsonObj;
       //noinspection unchecked
-      jsonFieldMap = (LinkedHashMap) (list.get(0));
+      if (list.size() == 1 && list.get(0) instanceof Collection) {
+        list = (List<Object>) list.get(0);
+      }
+      if (!list.isEmpty()) {
+        //noinspection unchecked
+        jsonFieldMap = (LinkedHashMap) (list.get(0));
+      } else {
+        list = new ArrayList<>();
+        jsonFieldMap.put("EmptyFileHasNoColumns", Boolean.TRUE);
+      }
     } else if (jsonObj instanceof Map) {
       //noinspection unchecked
       jsonFieldMap = (LinkedHashMap) jsonObj;
