@@ -28,6 +28,7 @@ import com.fasterxml.jackson.databind.MappingIterator;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.exc.MismatchedInputException;
 
+import java.io.BufferedReader;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -71,9 +72,8 @@ public class JsonEnumerator implements Enumerator<Object[]> {
           .configure(JsonParser.Feature.ALLOW_SINGLE_QUOTES, true)
           .configure(JsonParser.Feature.ALLOW_COMMENTS, true);
 
-      final JsonParser jsonParser = objectMapper.getFactory().createParser(source.openStream());
+      final JsonParser jsonParser = objectMapper.getFactory().createParser(new BufferedReader(source.reader()));
       jsonObjIter = objectMapper.readValues(jsonParser, Object.class);
-
     } catch (MismatchedInputException e) {
       if (!e.getMessage().contains("No content")) {
         throw new RuntimeException("Couldn't read " + source, e);
